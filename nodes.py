@@ -4,7 +4,7 @@ def roundIt(d):
     d = int(Decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     return(d)
 
-class ImageDimensionsCalculator:
+class ImageSize:
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -21,7 +21,7 @@ class ImageDimensionsCalculator:
         }
 
     RETURN_TYPES = ("INT", "INT",)
-    RETURN_NAMES = ("width", "height",)
+    RETURN_NAMES = ("WIDTH", "HEIGHT",)
 
     FUNCTION = "process"
     CATEGORY = "custom"
@@ -32,7 +32,7 @@ class ImageDimensionsCalculator:
             return (1, 1)
 
         # don't do anything if the operand is 0
-        if operand == "0":
+        if operand is None or operand == "0":
             return(1, 1)
 
         # do some data conversion, but the user can't be a total moron
@@ -74,11 +74,39 @@ class ImageDimensionsCalculator:
 
         return (width, height)
 
+class VideoSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "length": ("INT", {"label": "length"}, {"default": "3"}),
+                "fps": ("FLOAT", {"label": "fps"}, {"default": "16.0"})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "FLOAT")
+    RETURN_NAMES = ("FRAMES", "FPS")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, length, fps):
+        if length is None or length == 0 or fps is None or fps < 1.0:
+            return(3, 16.0, 49)
+
+        # do the math and add an extra frame
+        frames = roundIt((length * fps) + 1)
+
+        return(fps, frames)
+
 
 NODE_CLASS_MAPPINGS = {
-    "Image Dimensions Calculator": ImageDimensionsCalculator
+    "Image Size Converter": ImageSize,
+    "Video Settings Converter": VideoSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Image Dimensions Calculator": "Calculate Dimensions"
+    "Image Size Converter": "Image Size",
+    "Video Settings Converter": "Video Settings"
 }
