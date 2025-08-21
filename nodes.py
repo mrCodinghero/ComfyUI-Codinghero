@@ -98,7 +98,7 @@ class VideoSettings:
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return(fps, frames)
+        return(frames, fps)
 
 
 NODE_CLASS_MAPPINGS = {
