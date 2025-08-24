@@ -74,6 +74,34 @@ class ImageSize:
 
         return (width, height)
 
+class UpscaleSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "width": ("INT", {"label": "Width", "default": "512", "min": 2, "max": 8192, "step": 2}),
+                "height": ("INT", {"label": "Height", "default": "512", "min": 2, "max": 8192, "step": 2}),
+                "factor": ("INT", {"label": "Factor", "default": "2", "min": 1, "max": 8})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT", "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "adjWIDTH", "adjHEIGHT")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, width, height, factor):
+        # don't do anything if the factor is 0
+        if factor is None or factor == "0":
+            return(1, 1)
+
+        adjwidth  = roundIt(width / factor)
+        adjheight = roundIt(height / factor)
+
+        return (width, height, adjwidth, adjheight)
+
 class VideoSettings:
 
     @classmethod
@@ -103,10 +131,12 @@ class VideoSettings:
 
 NODE_CLASS_MAPPINGS = {
     "Image Size Converter": ImageSize,
+    "Upscale Settings": UpscaleSettings,
     "Video Settings Converter": VideoSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Image Size Converter": "Image Size",
+    "Upscale Settings": "Upscale Settings",
     "Video Settings Converter": "Video Settings"
 }
