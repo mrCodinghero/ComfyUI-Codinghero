@@ -87,7 +87,7 @@ class UpscaleSettings:
         }
 
     RETURN_TYPES = ("INT", "INT", "INT", "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "adjWIDTH", "adjHEIGHT")
+    RETURN_NAMES = ("final WIDTH", "final HEIGHT", "latent WIDTH", "latent HEIGHT")
 
     FUNCTION = "process"
     CATEGORY = "custom"
