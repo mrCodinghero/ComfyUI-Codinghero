@@ -1,10 +1,46 @@
 from decimal import Decimal, ROUND_HALF_UP
 
+
 def roundIt(d):
     d = int(Decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
-    return(d)
+    return (d)
 
-class ImageSize:
+
+#
+# ModelSelector
+#
+# Take input models from a checkpoint and a gguf and choose, on the fly, which one to use.
+#
+class ModelSelector:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "checkpoint": ("MODEL",),
+                "gguf": ("MODEL",),
+                "selection": (["Checkpoint", "GGUF"], {"default": "Checkpoint"})
+            }
+        }
+
+    RETURN_TYPES = ("MODEL",)
+    RETURN_NAMES = ("MODEL",)
+
+    FUNCTION = "choose"
+    CATEGORY = "custom"
+
+    def choose(self, checkpoint, gguf, selection):
+        if selection == "Checkpoint":
+            return (checkpoint,)
+        else:
+            return (gguf,)
+
+
+#
+# ImageSizeCalc
+#
+# Do somme math on the provide image and return the adjusted width and height.
+#
+class ImageSizeCalc:
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -33,7 +69,7 @@ class ImageSize:
 
         # don't do anything if the operand is 0
         if operand is None or operand == "0":
-            return(1, 1)
+            return (1, 1)
 
         # do some data conversion, but the user can't be a total moron
         if "." in operand:
@@ -74,7 +110,13 @@ class ImageSize:
 
         return (width, height)
 
-class UpscaleSettings:
+
+#
+# UpscaleSettingsCalc
+#
+# Enter the desired final image dimensions and a multiplier, and get those plus the latent image's scaled dimensions.
+#
+class UpscaleSettingsCalc:
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -95,14 +137,20 @@ class UpscaleSettings:
     def process(self, width, height, factor):
         # don't do anything if the factor is 0
         if factor is None or factor == "0":
-            return(1, 1)
+            return (1, 1)
 
         adjwidth  = roundIt(width / factor)
         adjheight = roundIt(height / factor)
 
         return (width, height, adjwidth, adjheight)
 
-class VideoSettings:
+
+#
+# VideoSettingsCalc
+#
+# Take the length (in seconds) and framerate and return those plus the number of frames.
+#
+class VideoSettingsCalc:
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -121,22 +169,24 @@ class VideoSettings:
 
     def process(self, length, fps):
         if length is None or length == 0 or fps is None or fps < 1.0:
-            return(3, 16.0, 49)
+            return (3, 16.0, 49)
 
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return(frames, fps)
+        return (frames, fps)
 
 
 NODE_CLASS_MAPPINGS = {
-    "Image Size Converter": ImageSize,
-    "Upscale Settings": UpscaleSettings,
-    "Video Settings Converter": VideoSettings
+    "Model Selector": ModelSelector,
+    "Image Size Calculator": ImageSizeCalc,
+    "Upscale Settings Calculator": UpscaleSettingsCalc,
+    "Video Settings Calculator": VideoSettingsCalc
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Image Size Converter": "Image Size",
-    "Upscale Settings": "Upscale Settings",
-    "Video Settings Converter": "Video Settings"
+    "Model Selector": "Model Selector",
+    "Image Size Calculator": "Image Size Calculator",
+    "Upscale Settings Calculator": "Upscale Settings Calculator",
+    "Video Settings Calculator": "Video Settings Calculator"
 }
