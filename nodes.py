@@ -172,7 +172,7 @@ class VideoSettings:
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, length, fps):
+    def process(self, length, fps, shift, steps, cfg):
         if length is None or length == 0 or fps is None or fps < 1.0:
             return (3, 16.0, 49)
 
