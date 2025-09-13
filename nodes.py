@@ -146,11 +146,11 @@ class UpscaleSettingsCalc:
 
 
 #
-# VideoSettingsCalc
+# VideoSettings
 #
-# Take the length (in seconds) and framerate and return those plus the number of frames.
+# All the relevant video settings in one place, with automatic length * fps math.  Only length and fps are required.
 #
-class VideoSettingsCalc:
+class VideoSettings:
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -158,11 +158,16 @@ class VideoSettingsCalc:
             "required": {
                 "length": ("INT", {"label": "length"}, {"default": "3"}),
                 "fps": ("FLOAT", {"label": "fps"}, {"default": "16.0"})
+            },
+            "optional": {
+                "shift": ("FLOAT", {"label": "shift"}, {"default": "7.0"}),
+                "steps": ("INT", {"label": "steps"}, {"default": "4"}),
+                "cfg": ("FLOAT", {"label": "cfg"}, {"default": "2.0"})
             }
         }
 
-    RETURN_TYPES = ("INT", "FLOAT")
-    RETURN_NAMES = ("FRAMES", "FPS")
+    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "INT", "FLOAT")
+    RETURN_NAMES = ("FRAMES", "FPS", "SHIFT", "STEPS", "CFG")
 
     FUNCTION = "process"
     CATEGORY = "custom"
@@ -174,19 +179,19 @@ class VideoSettingsCalc:
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return (frames, fps)
+        return (frames, fps, shift, steps, cfg)
 
 
 NODE_CLASS_MAPPINGS = {
     "Model Selector": ModelSelector,
     "Image Size Calculator": ImageSizeCalc,
     "Upscale Settings Calculator": UpscaleSettingsCalc,
-    "Video Settings Calculator": VideoSettingsCalc
+    "Video Settings": VideoSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Model Selector": "Model Selector",
     "Image Size Calculator": "Image Size Calculator",
     "Upscale Settings Calculator": "Upscale Settings Calculator",
-    "Video Settings Calculator": "Video Settings Calculator"
+    "Video Settings": "Video Settings"
 }
