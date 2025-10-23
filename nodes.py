@@ -161,25 +161,26 @@ class VideoSettings:
             },
             "optional": {
                 "shift": ("FLOAT", {"label": "shift"}, {"default": "7.0"}),
+                "cfg": ("FLOAT", {"label": "cfg"}, {"default": "2.0"}),
                 "steps": ("INT", {"label": "steps"}, {"default": "4"}),
-                "cfg": ("FLOAT", {"label": "cfg"}, {"default": "2.0"})
+                "switch": ("INT", {"label": "switch"}, {"default": "2"})
             }
         }
 
-    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "INT", "FLOAT")
-    RETURN_NAMES = ("FRAMES", "FPS", "SHIFT", "STEPS", "CFG")
+    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT")
+    RETURN_NAMES = ("FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, length, fps, shift, steps, cfg):
+    def process(self, length, fps, shift, steps, switch, cfg):
         if length is None or length == 0 or fps is None or fps < 1.0:
-            return (3, 16.0, 49)
+            return (49, 16.0, 6.5, 2.5, 4, 2)
 
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return (frames, fps, shift, steps, cfg)
+        return (frames, fps, shift, cfg, steps, switch)
 
 
 NODE_CLASS_MAPPINGS = {
