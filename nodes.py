@@ -1,6 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
+import comfy.samplers
 
-
+# roundIt helper method
 def roundIt(d):
     d = int(Decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     return (d)
@@ -163,24 +164,26 @@ class VideoSettings:
                 "shift": ("FLOAT", {"label": "shift"}, {"default": "7.0"}),
                 "cfg": ("FLOAT", {"label": "cfg"}, {"default": "2.0"}),
                 "steps": ("INT", {"label": "steps"}, {"default": "4"}),
-                "switch": ("INT", {"label": "switch"}, {"default": "2"})
+                "switch": ("INT", {"label": "switch"}, {"default": "2"}),
+                "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS,)
             }
         }
 
-    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT")
-    RETURN_NAMES = ("FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH")
+    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS)
+    RETURN_NAMES = ("FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, length, fps, shift, steps, switch, cfg):
+    def process(self, length, fps, shift, steps, switch, cfg, sampler_name, scheduler):
         if length is None or length == 0 or fps is None or fps < 1.0:
             return (49, 16.0, 6.5, 2.5, 4, 2)
 
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return (frames, fps, shift, cfg, steps, switch)
+        return (frames, fps, shift, cfg, steps, switch, sampler_name, scheduler)
 
 
 NODE_CLASS_MAPPINGS = {
