@@ -1,6 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 import comfy.samplers
 
+
 # roundIt helper method
 def roundIt(d):
     d = int(Decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
@@ -156,11 +157,11 @@ class VideoSettings:
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {
-                "length": ("INT", {"label": "length"}, {"default": "3"}),
-                "fps": ("FLOAT", {"label": "fps"}, {"default": "16.0"})
-            },
             "optional": {
+                "width": ("INT", {"label": "width"}, {"default": "720"}),
+                "height": ("INT", {"label": "height"}, {"default": "480"}),
+                "length": ("INT", {"label": "length"}, {"default": "3"}),
+                "fps": ("FLOAT", {"label": "fps"}, {"default": "16.0"}),
                 "shift": ("FLOAT", {"label": "shift"}, {"default": "7.0"}),
                 "cfg": ("FLOAT", {"label": "cfg"}, {"default": "2.0"}),
                 "steps": ("INT", {"label": "steps"}, {"default": "4"}),
@@ -170,20 +171,24 @@ class VideoSettings:
             }
         }
 
-    RETURN_TYPES = ("INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS)
-    RETURN_NAMES = ("FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER")
+    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS)
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, length, fps, shift, steps, switch, cfg, sampler_name, scheduler):
+    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler):
         if length is None or length == 0 or fps is None or fps < 1.0:
-            return (49, 16.0, 6.5, 2.5, 4, 2)
+            return (720, 480, 17, 16.0, 5.0, 2.5, 4, 2)
+
+        # adjust width and height to a multiple of 16
+        width = round(width / 16) * 16
+        height = round(height / 16) * 16
 
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return (frames, fps, shift, cfg, steps, switch, sampler_name, scheduler)
+        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler)
 
 
 NODE_CLASS_MAPPINGS = {
