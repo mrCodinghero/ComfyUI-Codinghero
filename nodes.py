@@ -169,7 +169,7 @@ class VideoSettings:
                 "switch": ("INT", {"label": "switch"}, {"default": "2"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
-                "seed": ("INT", {"label": "seed"}, {"default": "-1"})
+                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1})
             }
         }
 
