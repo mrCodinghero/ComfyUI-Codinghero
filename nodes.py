@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 import comfy.samplers
+import random
 
 
 # roundIt helper method
@@ -167,19 +168,20 @@ class VideoSettings:
                 "steps": ("INT", {"label": "steps"}, {"default": "4"}),
                 "switch": ("INT", {"label": "switch"}, {"default": "2"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS,)
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "seed": ("INT", {"label": "seed"}, {"default": "-1"})
             }
         }
 
-    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS)
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER")
+    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER", "SEED")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler):
+    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, seed):
         if length is None or length == 0 or fps is None or fps < 1.0:
-            return (720, 480, 17, 16.0, 5.0, 2.5, 4, 2)
+            return (720, 480, 17, 16.0, 5.0, 2.5, 4, 2, 0)
 
         # adjust width and height to a multiple of 16
         width = round(width / 16) * 16
@@ -188,7 +190,11 @@ class VideoSettings:
         # do the math and add an extra frame
         frames = roundIt((length * fps) + 1)
 
-        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler)
+        # generate a random seed if it's -1
+        if seed == -1:
+            seed = random.randint(0, 4294967294)
+
+        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler, seed)
 
 
 NODE_CLASS_MAPPINGS = {
