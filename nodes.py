@@ -224,7 +224,7 @@ class Settings:
                     {"label": "Scaling"},
                     {"default": "none"}
                 ),
-                "image": ("IMAGE", {"label": "Input Image"})
+                "image": ("IMAGE", {"default": None})
             }
         }
 
@@ -234,7 +234,7 @@ class Settings:
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, seed, scaling, image):
+    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, seed, scaling, image=None):
         if length is None or length == 0 or fps is None or fps < 1.0:
             return (720, 480, 17, 16.0, 5.0, 2.5, 4, 2, 0)
 
@@ -250,7 +250,7 @@ class Settings:
             seed = random.randint(0, 4294967294)
 
         # don't do anything else if we don't have an image
-        if len(image) > 0:
+        if image is not None and len(image) > 0:
             # get the image size
             imgHeight, imgWidth = image.shape[1], image.shape[2]
 
