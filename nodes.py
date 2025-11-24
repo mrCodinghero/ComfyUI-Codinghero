@@ -162,8 +162,8 @@ class SettingsBasic:
                 "width": ("INT", {"label": "width"}, {"default": "720"}),
                 "height": ("INT", {"label": "height"}, {"default": "480"}),
                 "shift": ("FLOAT", {"label": "shift"}, {"default": "7.0"}),
-                "cfg": ("FLOAT", {"label": "cfg"}, {"default": "2.0"}),
                 "steps": ("INT", {"label": "steps"}, {"default": "4"}),
+                "cfg": ("FLOAT", {"label": "cfg"}, {"default": "1.0"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
@@ -214,10 +214,10 @@ class SettingsBasic:
             height = max(1, roundIt(height))
 
         # adjust width and height to a multiple of 16
-        width = round(width / 16) * 16
+        width  = round(width / 16) * 16
         height = round(height / 16) * 16
 
-        return (width, height, shift, cfg, steps, sampler_name, scheduler, seed)
+        return (width, height, shift, steps, cfg, sampler_name, scheduler, seed)
 
 
 #
