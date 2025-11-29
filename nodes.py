@@ -1,6 +1,11 @@
 from decimal import Decimal, ROUND_HALF_UP
-import comfy.samplers
-import random
+import comfy.samplers, random
+
+# fix this piece of shit n00b code
+if "beta57" not in comfy.samplers.SCHEDULER_NAMES:
+    comfy.samplers.SCHEDULER_NAMES = comfy.samplers.SCHEDULER_NAMES + ["beta57"]
+if "beta57" not in comfy.samplers.KSampler.SCHEDULERS:
+    comfy.samplers.KSampler.SCHEDULERS = comfy.samplers.KSampler.SCHEDULERS + ["beta57"]
 
 
 # roundIt helper method
