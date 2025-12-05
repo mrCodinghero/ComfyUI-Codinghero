@@ -1,11 +1,16 @@
 from decimal import Decimal, ROUND_HALF_UP
 import comfy.samplers, random
+from .constants import RES_SAMPLERS
 
 # fix this piece of shit n00b code
-if "beta57" not in comfy.samplers.SCHEDULER_NAMES:
-    comfy.samplers.SCHEDULER_NAMES = comfy.samplers.SCHEDULER_NAMES + ["beta57"]
+if "bong_tangent" not in comfy.samplers.KSampler.SCHEDULERS:
+    comfy.samplers.KSampler.SCHEDULERS = comfy.samplers.KSampler.SCHEDULERS + ["bong_tangent"]
 if "beta57" not in comfy.samplers.KSampler.SCHEDULERS:
     comfy.samplers.KSampler.SCHEDULERS = comfy.samplers.KSampler.SCHEDULERS + ["beta57"]
+# if "bong_tangent" not in comfy.samplers.SCHEDULER_NAMES:
+#     comfy.samplers.SCHEDULER_NAMES = comfy.samplers.SCHEDULER_NAMES + ["bong_tangent"]
+# if "beta57" not in comfy.samplers.SCHEDULER_NAMES:
+#     comfy.samplers.SCHEDULER_NAMES = comfy.samplers.SCHEDULER_NAMES + ["beta57"]
 
 
 # roundIt helper method
@@ -171,6 +176,8 @@ class SettingsBasic:
                 "cfg": ("FLOAT", {"label": "cfg"}, {"default": "1.0"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "res_sampler": (RES_SAMPLERS, {"default": "res_2m"}), 
+                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (
                     ["none", "original", "nearest"],
@@ -181,13 +188,13 @@ class SettingsBasic:
             }
         }
 
-    RETURN_TYPES = ("INT", "INT", "FLOAT", "INT", "FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "SHIFT", "STEPS", "CFG", "SAMPLER", "SCHEDULER", "SEED")
+    RETURN_TYPES = ("INT", "INT", "FLOAT", "INT", "FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, RES_SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "SHIFT", "STEPS", "CFG", "SAMPLER", "SCHEDULER", "RES_SAMPLER", "RES_SCHEDULER", "SEED")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, width, height, shift, steps, cfg, sampler_name, scheduler, seed, resize, image=None):
+    def process(self, width, height, shift, steps, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
         # generate a random seed if it's -1
         if seed == -1:
             seed = random.randint(0, 4294967294)
@@ -222,7 +229,7 @@ class SettingsBasic:
         width  = round(width / 16) * 16
         height = round(height / 16) * 16
 
-        return (width, height, shift, steps, cfg, sampler_name, scheduler, seed)
+        return (width, height, shift, steps, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed)
 
 
 #
@@ -246,6 +253,8 @@ class Settings:
                 "switch": ("INT", {"label": "switch"}, {"default": "2"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "res_sampler": (RES_SAMPLERS, {"default": "res_2m"}), 
+                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (
                     ["none", "original", "nearest"],
@@ -256,13 +265,13 @@ class Settings:
             }
         }
 
-    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER", "SEED")
+    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, RES_SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER", "RES_SAMPLER", "RES_SCHEDULER", "SEED")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, seed, resize, image=None):
+    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
         if length is None or length == 0 or fps is None or fps < 1.0:
             return (720, 480, 17, 16.0, 5.0, 2.5, 4, 2, 0)
 
@@ -303,7 +312,7 @@ class Settings:
         width = round(width / 16) * 16
         height = round(height / 16) * 16
 
-        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler, seed)
+        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler, res_sampler, res_scheduler, seed)
 
 
 
