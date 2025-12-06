@@ -176,8 +176,8 @@ class SettingsBasic:
                 "cfg": ("FLOAT", {"label": "cfg"}, {"default": "1.0"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
-                "res_sampler": (RES_SAMPLERS, {"default": "res_2m"}), 
-                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "res_sampler": (RES_SAMPLERS, {"default": "linear/euler"}), 
+                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (
                     ["none", "original", "nearest"],
@@ -253,8 +253,8 @@ class Settings:
                 "switch": ("INT", {"label": "switch"}, {"default": "2"}),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
-                "res_sampler": (RES_SAMPLERS, {"default": "res_2m"}), 
-                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "res_sampler": (RES_SAMPLERS, {"default": "linear/euler"}), 
+                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (
                     ["none", "original", "nearest"],
@@ -272,11 +272,9 @@ class Settings:
     CATEGORY = "custom"
 
     def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
-        if length is None or length == 0 or fps is None or fps < 1.0:
-            return (720, 480, 17, 16.0, 5.0, 2.5, 4, 2, 0)
-
-        # do the math and add an extra frame
-        frames = roundIt((length * fps) + 1)
+        if length is not None and length > 0 and fps is not None and fps > 0.0:
+            # do the math and add an extra frame
+            frames = roundIt((length * fps) + 1)
 
         # generate a random seed if it's -1
         if seed == -1:
@@ -312,8 +310,7 @@ class Settings:
         width = round(width / 16) * 16
         height = round(height / 16) * 16
 
-        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler, res_sampler, res_scheduler, seed)
-
+        return (width, height, frames, fps, shift, steps, switch, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed)
 
 
 NODE_CLASS_MAPPINGS = {
