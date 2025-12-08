@@ -271,7 +271,7 @@ class Settings:
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, width, height, length, fps, shift, steps, switch, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
+    def process(self, width, height, length, fps, shift, cfg, steps, switch, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
         if length is not None and length > 0 and fps is not None and fps > 0.0:
             # do the math and add an extra frame
             frames = roundIt((length * fps) + 1)
@@ -310,7 +310,7 @@ class Settings:
         width = round(width / 16) * 16
         height = round(height / 16) * 16
 
-        return (width, height, frames, fps, shift, steps, switch, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed)
+        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler, res_sampler, res_scheduler, seed)
 
 
 NODE_CLASS_MAPPINGS = {
