@@ -334,9 +334,9 @@ class FluxSettings:
                 "guidance": ("FLOAT", {"label": "shift", "step": 0.1, "default": 3.5}),
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
+                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (["none", "original", "fit", "scale"], {"label": "Resize", "default": "none"}),
                 "scale": ("STRING", {"label": "scale", "default": "1.00"}),
-                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "image": ("IMAGE", {"default": None})
             }
         }
@@ -412,9 +412,9 @@ class FluxSettingsRes:
                 "guidance": ("FLOAT", {"label": "shift", "step": 0.1, "default": 3.5}),
                 "sampler": (RES_SAMPLERS, {"default": "linear/euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
+                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (["none", "original", "fit", "scale"], {"label": "Resize", "default": "none"}),
                 "scale": ("STRING", {"label": "scale", "default": "1.00"}),
-                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "image": ("IMAGE", {"default": None})
             }
         }
