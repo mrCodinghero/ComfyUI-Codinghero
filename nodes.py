@@ -20,35 +20,6 @@ def roundIt(d):
 
 
 #
-# ModelSelector
-#
-# Take input models from a checkpoint and a gguf and choose, on the fly, which one to use.
-#
-class ModelSelector:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "checkpoint": ("MODEL",),
-                "gguf": ("MODEL",),
-                "selection": (["Checkpoint", "GGUF"], {"default": "Checkpoint"})
-            }
-        }
-
-    RETURN_TYPES = ("MODEL",)
-    RETURN_NAMES = ("MODEL",)
-
-    FUNCTION = "choose"
-    CATEGORY = "custom"
-
-    def choose(self, checkpoint, gguf, selection):
-        if selection == "Checkpoint":
-            return (checkpoint,)
-        else:
-            return (gguf,)
-
-
-#
 # ImageSizeCalc
 #
 # Do somme math on the provide image and return the adjusted width and height.
@@ -233,7 +204,7 @@ class SettingsBasic:
 
 
 #
-# Settings
+# Settings (Advanced)
 #
 # All the settings in one convenient node.
 #
@@ -472,22 +443,60 @@ class FluxSettingsRes:
         return (width, height, steps, cfg, guidance, sampler, scheduler, seed)
 
 
+#
+# Ideogram.4 Settings
+#
+# All the Ideogram.4 settings in one convenient node.
+#
+class IdeogramSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "optional": {
+                "width": ("INT", {"label": "width", "default": 512}),
+                "height": ("INT", {"label": "height", "default": 512}),
+                "cfg": ("FLOAT", {"label": "cfg", "step": 0.1, "default": 3.0}),
+                "guider": ("FLOAT", {"label": "shift", "step": 0.1, "default": 7.0}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}),
+                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "FLOAT", "FLOAT", comfy.samplers.KSampler.SAMPLERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "CFG", "GUIDER", "SAMPLER", "SEED")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, width, height, cfg, guider, sampler, seed):
+        # generate a random seed if it's -1
+        if seed == -1:
+            seed = random.randint(0, 4294967294)
+
+        # adjust width and height to a multiple of 16
+        width  = round(width / 16) * 16
+        height = round(height / 16) * 16
+
+        return (width, height, cfg, guider, sampler, seed)
+
+
 NODE_CLASS_MAPPINGS = {
-    "Model Selector": ModelSelector,
     "Image Size Calculator": ImageSizeCalc,
     "Upscale Settings Calculator": UpscaleSettingsCalc,
     "Basic Settings": SettingsBasic,
     "Settings": Settings,
     "Flux.2 Settings": FluxSettings,
-    "RES4LYF Flux.2 Settings": FluxSettingsRes
+    "Flux.2 Settings RES4LYF": FluxSettingsRes,
+    "Ideogram.4 Settings": IdeogramSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Model Selector": "Model Selector",
     "Image Size Calculator": "Image Size Calculator",
     "Upscale Settings Calculator": "Upscale Settings Calculator",
     "Basic Settings": "Basic Settings",
     "Settings": "Settings",
     "Flux.2 Settings": "Flux.2 Settings",
-    "RES4LYF Flux.2 Settings": "RES4LYF Flux.2 Settings"
+    "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
+    "Ideogram.4 Settings": "Ideogram.4 Settings",
 }
