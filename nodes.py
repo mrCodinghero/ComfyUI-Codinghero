@@ -571,7 +571,7 @@ class MinimaxT2iSettings:
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
                 "resolution": (list(RESOLUTION_PRESETS.keys()), {"label": "resolution", "default": "(1:1) 768 x 768"}),
-                "model": ("BOOLEAN", {"label": "model", "default": False, "label_on": "fl2va", "label_off": "ref2va"}),
+                "model": ("BOOLEAN", {"label": "model", "default": False, "label_on": "ref2va", "label_off": "fl2va"}),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1})
             }
         }
