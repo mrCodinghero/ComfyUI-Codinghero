@@ -560,7 +560,7 @@ class IdeogramSettings:
 #
 # All the Miniax-H3 settings for text to image in one convenient node.
 #
-class MinimaxSettings:
+class MinimaxT2iSettings:
 
     @classmethod
     def INPUT_TYPES(cls):
