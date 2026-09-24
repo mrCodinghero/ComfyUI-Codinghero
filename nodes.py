@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 import comfy.samplers, random
-from .constants import RES_SAMPLERS
+from .constants import RESOLUTION_PRESETS, RES_SAMPLERS
 
 # fix this piece of shit n00b code
 if "bong_tangent" not in comfy.samplers.KSampler.SCHEDULERS:
@@ -555,6 +555,47 @@ class IdeogramSettings:
         return (width, height, cfg, guider, sampler, seed)
 
 
+#
+# Minimax-H3 t2i Settings
+#
+# All the Miniax-H3 settings for text to image in one convenient node.
+#
+class MinimaxSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "optional": {
+                "steps": ("INT", {"label": "steps", "default": 8}),
+                "length": ("INT", {"label": "length", "default": 1}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
+                "resolution": (list(cls.RESOLUTION_PRESETS.keys()), {"label": "ResiResolution", "default": "(1:1) 768 x 768"}),
+                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, list(RESOLUTION_PRESETS.keys()), "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "STEPS", "LENGTH", "SAMPLER", "SCHEDULER", "RESOLUTION", "SEED")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, steps, length, sampler, scheduler, resolution, seed):
+        # generate a random seed if it's -1
+        if seed == -1:
+            seed = random.randint(0, 4294967294)
+
+        # calculate the frames
+        length *= 24
+
+        # get the width and height
+        width, height = RESOLUTION_PRESETS[resolution]
+
+        return (width, height, steps, length, sampler, scheduler, resolution, seed)
+
+
+
 NODE_CLASS_MAPPINGS = {
     "Image Size Calculator": ImageSizeCalc,
     "Upscale Settings Calculator": UpscaleSettingsCalc,
@@ -563,7 +604,8 @@ NODE_CLASS_MAPPINGS = {
     "Qwen Edit Settings": QwenEditSettings,
     "Flux.2 Settings": FluxSettings,
     "Flux.2 Settings RES4LYF": FluxSettingsRes,
-    "Ideogram.4 Settings": IdeogramSettings
+    "Ideogram.4 Settings": IdeogramSettings,
+    "Minimax-H3 t2i Settings": MinimaxT2iSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -575,4 +617,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Flux.2 Settings": "Flux.2 Settings",
     "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
     "Ideogram.4 Settings": "Ideogram.4 Settings",
+    "Minimax-H3 t2i Settings": "Minimax-H3 t2i Settings"
 }
