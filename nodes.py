@@ -576,8 +576,8 @@ class MinimaxT2iSettings:
             }
         }
 
-    RETURN_TYPES = ("INT", "INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, list(RESOLUTION_PRESETS.keys()), "BOOLEAN", "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "LENGTH", "STEPS", "SAMPLER", "SCHEDULER", "RESOLUTION", "MODEL", "SEED")
+    RETURN_TYPES = ("INT", "INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "BOOLEAN", "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "LENGTH", "STEPS", "SAMPLER", "SCHEDULER", "MODEL", "SEED")
 
     FUNCTION = "process"
     CATEGORY = "custom"
@@ -593,7 +593,7 @@ class MinimaxT2iSettings:
         # get the width and height
         width, height = RESOLUTION_PRESETS[resolution]
 
-        return (width, height, length, steps, sampler, scheduler, resolution, model, seed)
+        return (width, height, length, steps, sampler, scheduler, model, seed)
 
 
 
