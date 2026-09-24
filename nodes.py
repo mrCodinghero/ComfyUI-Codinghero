@@ -571,17 +571,18 @@ class MinimaxT2iSettings:
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
                 "resolution": (list(RESOLUTION_PRESETS.keys()), {"label": "ResiResolution", "default": "(1:1) 768 x 768"}),
+                "model": ("BOOLEAN", {"label": "model", "default": False, "label_on": "fl2va", "label_off": "ref2va"}),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1})
             }
         }
 
-    RETURN_TYPES = ("INT", "INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, list(RESOLUTION_PRESETS.keys()), "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "LENGTH", "STEPS", "SAMPLER", "SCHEDULER", "RESOLUTION", "SEED")
+    RETURN_TYPES = ("INT", "INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, list(RESOLUTION_PRESETS.keys()), "BOOLEAN", "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "LENGTH", "STEPS", "SAMPLER", "SCHEDULER", "RESOLUTION", "MODEL", "SEED")
 
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, length, steps, sampler, scheduler, resolution, seed):
+    def process(self, length, steps, sampler, scheduler, resolution, model, seed):
         # generate a random seed if it's -1
         if seed == -1:
             seed = random.randint(0, 4294967294)
@@ -592,7 +593,7 @@ class MinimaxT2iSettings:
         # get the width and height
         width, height = RESOLUTION_PRESETS[resolution]
 
-        return (width, height, length, steps, sampler, scheduler, resolution, seed)
+        return (width, height, length, steps, sampler, scheduler, resolution, model, seed)
 
 
 
