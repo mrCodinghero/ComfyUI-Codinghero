@@ -570,7 +570,7 @@ class MinimaxT2iSettings:
                 "length": ("INT", {"label": "length", "default": 1}),
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
-                "resolution": (list(cls.RESOLUTION_PRESETS.keys()), {"label": "ResiResolution", "default": "(1:1) 768 x 768"}),
+                "resolution": (list(RESOLUTION_PRESETS.keys()), {"label": "ResiResolution", "default": "(1:1) 768 x 768"}),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1})
             }
         }
