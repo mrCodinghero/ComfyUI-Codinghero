@@ -556,11 +556,11 @@ class IdeogramSettings:
 
 
 #
-# Minimax-H3 t2i Settings
+# Minimax-H3 t2v Settings
 #
-# All the Miniax-H3 settings for text to image in one convenient node.
+# All the Miniax-H3 settings for text to video in one convenient node.
 #
-class MinimaxT2iSettings:
+class MinimaxT2vSettings:
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -606,7 +606,7 @@ NODE_CLASS_MAPPINGS = {
     "Flux.2 Settings": FluxSettings,
     "Flux.2 Settings RES4LYF": FluxSettingsRes,
     "Ideogram.4 Settings": IdeogramSettings,
-    "Minimax-H3 t2i Settings": MinimaxT2iSettings
+    "Minimax-H3 t2v Settings": MinimaxT2vSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -618,5 +618,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Flux.2 Settings": "Flux.2 Settings",
     "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
     "Ideogram.4 Settings": "Ideogram.4 Settings",
-    "Minimax-H3 t2i Settings": "Minimax-H3 t2i Settings"
+    "Minimax-H3 t2v Settings": "Minimax-H3 t2v Settings"
 }
