@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 import comfy.samplers, random
-from .constants import RESOLUTION_PRESETS, RES_SAMPLERS
+from .constants import RESOLUTION_PRESETS, RES_SAMPLERS, ASPECT_RATIOS
 
 # fix this piece of shit n00b code
 if "bong_tangent" not in comfy.samplers.KSampler.SCHEDULERS:
@@ -596,6 +596,52 @@ class MinimaxT2vSettings:
         return (width, height, length, steps, sampler, scheduler, model, seed)
 
 
+#
+# Minimax-H3 Settings
+#
+# Basic settings for Miniax-H3 with aspect ratio and megapixels instead of static resolutions.
+#
+class MinimaxSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "optional": {
+                "steps": ("INT", {"label": "steps", "default": 8}),
+                "length": ("INT", {"label": "length", "default": 1}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
+                "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.1, "max": 2.0, "default": 0.5}),
+                "ratio": (list(ASPECT_RATIOS.keys()), {"label": "ratio", "default": "1:1"}),
+                "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "LENGTH", "STEPS", "SAMPLER", "SCHEDULER", "SEED")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, length, steps, sampler, scheduler, megapixels, ratio, seed):
+        # generate a random seed if it's -1
+        if seed == -1:
+            seed = random.randint(0, 4294967294)
+
+        # get the aspect ratio
+        ratio = ASPECT_RATIOS[ratio]
+
+        # calculate the frames
+        length *= 24
+        length += 1
+
+        # get the width and height
+        pixels = megapixels * 1000000
+        width  = 16 * round(math.sqrt(pixels * ratio) / 16)
+        height = 16 * round(math.sqrt(pixels / ratio) / 16)
+
+        return (width, height, length, steps, sampler, scheduler, seed)
+
 
 NODE_CLASS_MAPPINGS = {
     "Image Size Calculator": ImageSizeCalc,
@@ -606,7 +652,8 @@ NODE_CLASS_MAPPINGS = {
     "Flux.2 Settings": FluxSettings,
     "Flux.2 Settings RES4LYF": FluxSettingsRes,
     "Ideogram.4 Settings": IdeogramSettings,
-    "Minimax-H3 t2v Settings": MinimaxT2vSettings
+    "Minimax-H3 t2v Settings": MinimaxT2vSettings,
+    "Minimax-H3 Settings": MinimaxSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -618,5 +665,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Flux.2 Settings": "Flux.2 Settings",
     "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
     "Ideogram.4 Settings": "Ideogram.4 Settings",
-    "Minimax-H3 t2v Settings": "Minimax-H3 t2v Settings"
+    "Minimax-H3 t2v Settings": "Minimax-H3 t2v Settings",
+    "Minimax-H3 Settings": "Minimax-H3 Settings"
 }
