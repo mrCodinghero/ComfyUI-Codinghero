@@ -1,5 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
-import comfy.samplers, random
+import comfy.samplers, random, math
 from .constants import RESOLUTION_PRESETS, RES_SAMPLERS, ASPECT_RATIOS
 
 # fix this piece of shit n00b code
