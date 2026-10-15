@@ -637,8 +637,8 @@ class MinimaxSettings:
 
         # get the width and height
         pixels = megapixels * 1000000
-        width  = 16 * round(math.sqrt(pixels * ratio) / 16)
-        height = 16 * round(math.sqrt(pixels / ratio) / 16)
+        width  = 16 * round(math.sqrt(pixels * ratio) / 32)
+        height = 16 * round(math.sqrt(pixels / ratio) / 32)
 
         return (width, height, length, steps, sampler, scheduler, seed)
 
