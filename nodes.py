@@ -643,6 +643,83 @@ class MinimaxSettings:
         return (width, height, length, steps, sampler, scheduler, seed)
 
 
+#
+# Qwen 2.1 Edit Settings
+#
+# Settings for image editing on Qwen 2.1
+#
+class Qwen21EditSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "optional": {
+                "width": ("INT", {"label": "width", "default": 512}),
+                "height": ("INT", {"label": "height", "default": 512}),
+                "steps": ("INT", {"label": "steps", "default": 8}),
+                "cfg": ("FLOAT", {"label": "cfg", "step": 0.1, "default": 1.0}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
+                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
+                "resize": (["none", "original", "fit", "scale"], {"label": "Resize", "default": "none"}),
+                "scale": ("STRING", {"label": "scale", "default": "1.00"}),
+                "image": ("IMAGE", {"default": None})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "STEPS", "CFG", "SAMPLER", "SCHEDULER", "SEED")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, width, height, steps, cfg, sampler, scheduler, resize, scale, seed, image=None):
+        # generate a random seed if it's -1
+        if seed == -1:
+            seed = random.randint(0, 4294967294)
+
+        # don't do any math if we don't have an image
+        if image is not None and len(image) > 0:
+            # get the image size
+            imgHeight, imgWidth = image.shape[1], image.shape[2]
+
+            # scale must be greater than 0
+            if scale is None:
+                scale = float(1.000)
+            else:
+                scale = float(scale)
+
+            match resize:
+                case "none":
+                    width  = width
+                    height = height
+                case "original":
+                    width  = imgWidth
+                    height = imgHeight
+                case "fit":
+                    d = max(width, height)
+                    m = max(imgWidth, imgHeight)
+                    f = d / m
+                    width  = imgWidth * f
+                    height = imgHeight * f
+                case "scale":
+                    width  = imgWidth * scale
+                    height = imgHeight * scale
+                case _:
+                    width  = width
+                    height = height
+
+            # return at least a single pixel
+            width  = max(1, roundIt(width))
+            height = max(1, roundIt(height))
+
+        # adjust width and height to a multiple of 16
+        width  = round(width / 16) * 16
+        height = round(height / 16) * 16
+
+        return (width, height, steps, cfg, sampler, scheduler, seed)
+
+
 NODE_CLASS_MAPPINGS = {
     "Image Size Calculator": ImageSizeCalc,
     "Upscale Settings Calculator": UpscaleSettingsCalc,
@@ -653,7 +730,8 @@ NODE_CLASS_MAPPINGS = {
     "Flux.2 Settings RES4LYF": FluxSettingsRes,
     "Ideogram.4 Settings": IdeogramSettings,
     "Minimax-H3 t2v Settings": MinimaxT2vSettings,
-    "Minimax-H3 Settings": MinimaxSettings
+    "Minimax-H3 Settings": MinimaxSettings,
+    "Qwen 2.1 Edit Settings": Qwen21EditSettings
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -666,5 +744,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
     "Ideogram.4 Settings": "Ideogram.4 Settings",
     "Minimax-H3 t2v Settings": "Minimax-H3 t2v Settings",
-    "Minimax-H3 Settings": "Minimax-H3 Settings"
+    "Minimax-H3 Settings": "Minimax-H3 Settings",
+    "Qwen 2.1 Edit Settings": "Qwen 2.1 Edit Settings"
 }
