@@ -662,7 +662,7 @@ class Qwen21EditSettings:
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
                 "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
                 "resize": (["none", "original", "fit", "scale"], {"label": "Resize", "default": "none"}),
-                "scale": ("STRING", {"label": "scale", "default": "1.00"}),
+                "scale": ("FLOAT", {"label": "scale", "step": 0.1, "default": 1.00}),
                 "image": ("IMAGE", {"default": None})
             }
         }
