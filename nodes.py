@@ -659,7 +659,10 @@ class MinimaxImageSettings:
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
                 "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.1, "max": 2.0, "step": 0.01, "round": 0.01, "default": 0.5}),
                 "ratio": (list(ASPECT_RATIOS.keys()), {"label": "ratio", "default": "1:1"}),
-                "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0})
+                "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0}),
+                "resize": (["none", "scale", "original"], {"label": "Resize", "default": "none"}),
+                "scale": ("FLOAT", {"label": "scale", "step": 0.1, "default": 1.00}),
+                "image": ("IMAGE", {"default": None})
             }
         }
 
@@ -669,7 +672,7 @@ class MinimaxImageSettings:
     FUNCTION = "process"
     CATEGORY = "custom"
 
-    def process(self, steps, sampler, scheduler, megapixels, ratio, seed):
+    def process(self, steps, sampler, scheduler, megapixels, ratio, resize, scale, seed, image=None):
         # generate a random seed if it's -1
         if seed == -1:
             seed = random.randint(0, 4294967294)
@@ -681,6 +684,31 @@ class MinimaxImageSettings:
         pixels = megapixels * 1000000
         width  = 16 * round(math.sqrt(pixels * ratio) / 16)
         height = 16 * round(math.sqrt(pixels / ratio) / 16)
+
+        # don't do any math if we don't have an image
+        if image is not None and len(image) > 0:
+            # get the image size
+            imgHeight, imgWidth = image.shape[1], image.shape[2]
+
+            # scale must be greater than 0
+            if scale is None:
+                scale = float(1.000)
+            else:
+                scale = float(scale)
+
+            match resize:
+                case "none":
+                    width  = width
+                    height = height
+                case "scale":
+                    width  = imgWidth * scale
+                    height = imgHeight * scale
+                case "original":
+                    width  = imgWidth
+                    height = imgHeight
+                case _:
+                    width  = width
+                    height = height
 
         return (width, height, steps, sampler, scheduler, seed)
 
