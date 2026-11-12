@@ -660,7 +660,7 @@ class MinimaxImageSettings:
                 "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.1, "max": 2.0, "step": 0.01, "round": 0.01, "default": 0.5}),
                 "ratio": (list(ASPECT_RATIOS.keys()), {"label": "ratio", "default": "1:1"}),
                 "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0}),
-                "resize": (["none", "scale", "original"], {"label": "Resize", "default": "none"}),
+                "resize": (["original", "scale", "none"], {"label": "Resize", "default": "none"}),
                 "scale": ("FLOAT", {"label": "scale", "step": 0.1, "default": 1.00}),
                 "image": ("IMAGE", {"default": None})
             }
@@ -691,24 +691,17 @@ class MinimaxImageSettings:
             imgHeight, imgWidth = image.shape[1], image.shape[2]
 
             # scale must be greater than 0
-            if scale is None:
-                scale = float(1.000)
-            else:
-                scale = float(scale)
+            scale = max(0.01, float(scale or 1.0))
 
             match resize:
-                case "none":
-                    width  = width
-                    height = height
-                case "scale":
-                    width  = imgWidth * scale
-                    height = imgHeight * scale
                 case "original":
                     width  = imgWidth
                     height = imgHeight
-                case _:
-                    width  = width
-                    height = height
+                case "scale":
+                    width  = round(imgWidth * scale)
+                    height = round(imgHeight * scale)
+                case "none":
+                    pass
 
         return (width, height, steps, sampler, scheduler, seed)
 
