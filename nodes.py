@@ -644,6 +644,48 @@ class MinimaxSettings:
 
 
 #
+# Minimax-H3 Image Settings
+#
+# Basic settings for Miniax-H3 Image with aspect ratio and megapixels instead of static resolutions.
+#
+class MinimaxImageSettings:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "optional": {
+                "steps": ("INT", {"label": "steps", "default": 8}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
+                "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.1, "max": 2.0, "step": 0.01, "round": 0.01, "default": 0.5}),
+                "ratio": (list(ASPECT_RATIOS.keys()), {"label": "ratio", "default": "1:1"}),
+                "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0})
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
+    RETURN_NAMES = ("WIDTH", "HEIGHT", "STEPS", "SAMPLER", "SCHEDULER", "SEED")
+
+    FUNCTION = "process"
+    CATEGORY = "custom"
+
+    def process(self, steps, sampler, scheduler, megapixels, ratio, seed):
+        # generate a random seed if it's -1
+        if seed == -1:
+            seed = random.randint(0, 4294967294)
+
+        # get the aspect ratio
+        ratio = ASPECT_RATIOS[ratio]
+
+        # get the width and height
+        pixels = megapixels * 1000000
+        width  = 16 * round(math.sqrt(pixels * ratio) / 16)
+        height = 16 * round(math.sqrt(pixels / ratio) / 16)
+
+        return (width, height, steps, sampler, scheduler, seed)
+
+
+#
 # Qwen 2.1 Edit Settings
 #
 # Settings for image editing on Qwen 2.1
@@ -731,6 +773,7 @@ NODE_CLASS_MAPPINGS = {
     "Ideogram.4 Settings": IdeogramSettings,
     "Minimax-H3 t2v Settings": MinimaxT2vSettings,
     "Minimax-H3 Settings": MinimaxSettings,
+    "Minimax-H3 Image Settings": MinimaxImageSettings,
     "Qwen 2.1 Edit Settings": Qwen21EditSettings
 }
 
@@ -745,5 +788,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Ideogram.4 Settings": "Ideogram.4 Settings",
     "Minimax-H3 t2v Settings": "Minimax-H3 t2v Settings",
     "Minimax-H3 Settings": "Minimax-H3 Settings",
+    "Minimax-H3 Image Settings": "Minimax-H3 Image Settings",
     "Qwen 2.1 Edit Settings": "Qwen 2.1 Edit Settings"
 }
