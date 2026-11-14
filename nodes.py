@@ -657,7 +657,7 @@ class MinimaxImageSettings:
                 "steps": ("INT", {"label": "steps", "default": 8}),
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
-                "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.50, "max": 20.0, "step": 0.25, "round": 0.25, "default": 1.0}),
+                "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.50, "max": 20.0, "step": 0.25, "default": 1.0}),
                 "ratio": (list(ASPECT_RATIOS.keys()), {"label": "ratio", "default": "1:1"}),
                 "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0}),
                 "resize": (["original", "scale", "none"], {"label": "Resize", "default": "none"}),
