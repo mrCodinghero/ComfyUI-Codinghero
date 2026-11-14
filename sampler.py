@@ -68,7 +68,7 @@ class CustomKSAMPLER:
                 "negative": ("CONDITIONING",),
                 "latent_image": ("LATENT",),
                 "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01, "round": False,
-                                    "tooltip": "Experimental post-step SDE amount; not RES4LYF parity."}),
+                                    "tooltip": "Experimental Euler hard-SDE integration (not yet ClownsharK parity). Other samplers require eta 0."}),
                 "sigmas_string": ("STRING", {"default": "", "multiline": True,
                                                "tooltip": "Optional comma- or newline-separated descending sigma values. Leave empty to use the selected native scheduler."}),
                 "interpolate_to_steps": ("INT", {"default": 20, "min": 1, "max": 10000, "step": 1}),
@@ -81,8 +81,8 @@ class CustomKSAMPLER:
     CATEGORY = "sampling/custom"
     DESCRIPTION = (
         "Native ComfyUI KSampler samplers and schedulers, optional KJNodes-style "
-        "log-linear custom sigmas, and an experimental RES4LYF-style hard SDE eta. "
-        "Non-zero eta is currently supported only by single-evaluation-per-step samplers."
+        "log-linear custom sigmas, and an experimental Euler hard-SDE eta. "
+        "Non-zero eta currently supports Euler only; other samplers run natively with eta 0."
     )
 
     def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
@@ -111,7 +111,7 @@ class CustomKSAMPLER:
         else:
             sigmas = custom_sigmas.to(device=model.load_device)
 
-        sampler = make_sde_sampler(sampler_name, sigmas, eta, seed, noise_mask)
+        sampler = make_sde_sampler(sampler_name, sigmas, eta, seed, noise_mask, model.get_model_object("model_sampling"))
 
         total_steps = max(len(sigmas) - 1, 1)
         callback = latent_preview.prepare_callback(model, total_steps)
