@@ -68,7 +68,7 @@ class CustomKSAMPLER:
                 "negative": ("CONDITIONING",),
                 "latent_image": ("LATENT",),
                 "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01, "round": False,
-                                    "tooltip": "Experimental Euler hard-SDE integration (not yet ClownsharK parity). Other samplers require eta 0."}),
+                                    "tooltip": "Experimental shared SDE bridge for native samplers. Multistep solvers reset history per interval; not ClownsharK parity."}),
                 "sigmas_string": ("STRING", {"default": "", "multiline": True,
                                                "tooltip": "Optional comma- or newline-separated descending sigma values. Leave empty to use the selected native scheduler."}),
                 "interpolate_to_steps": ("INT", {"default": 20, "min": 1, "max": 10000, "step": 1}),
@@ -81,8 +81,8 @@ class CustomKSAMPLER:
     CATEGORY = "sampling/custom"
     DESCRIPTION = (
         "Native ComfyUI KSampler samplers and schedulers, optional KJNodes-style "
-        "log-linear custom sigmas, and an experimental Euler hard-SDE eta. "
-        "Non-zero eta currently supports Euler only; other samplers run natively with eta 0."
+        "log-linear custom sigmas, and experimental SDE eta for all native samplers. "
+        "Multistep solvers currently reset history each interval; not RK parity."
     )
 
     def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
