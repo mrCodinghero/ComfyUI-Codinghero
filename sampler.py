@@ -10,21 +10,14 @@ import comfy.utils
 import latent_preview
 
 
-# These native samplers evaluate the model once at each scheduled sigma.
-# The SDE adapter applies the RES4LYF transition at the next scheduled
-# sigma evaluation. Multi-stage/adaptive samplers need sampler-specific
-# stage handling and are deliberately rejected when eta is non-zero.
-_SDE_COMPATIBLE_SAMPLERS = {
-    "euler",
-    "euler_cfg_pp",
-    "lms",
-    "dpmpp_2m",
-    "dpmpp_2m_cfg_pp",
-    "ipndm",
-    "ipndm_v",
-    "deis",
-    "res_multistep",
-    "res_multistep_cfg_pp",
+# Samplers with explicit RES4LYF hard-SDE integration adapters.
+# The adapter changes each solver's deterministic endpoint to sigma_down,
+# then performs the exact RES4LYF swap_noise_step at the accepted step boundary.
+_SDE_ADAPTERS = {
+    "euler": "euler",
+    "euler_ancestral": "euler_ancestral",
+    "heun": "heun",
+    "dpmpp_2m": "dpmpp_2m",
 }
 
 
@@ -69,151 +62,181 @@ def _parse_custom_sigmas(sigmas_string, interpolate_to_steps):
 
 
 def _normalize_noise_channelwise(noise):
-    """RES4LYF normalize_zscore(noise, channelwise=True), with finite guard."""
+    """RES4LYF latents.normalize_zscore(noise, channelwise=True)."""
     mean = noise.mean(dim=(-2, -1), keepdim=True)
     std = noise.std(dim=(-2, -1), keepdim=True)
-    return (noise - mean) / std.clamp_min(1e-6)
+    return (noise - mean) / std.clamp_min(1e-12)
 
 
-def _res4lyf_hard_sde_coefficients(sigma, sigma_next, eta, sigma_max, variance_preserving):
-    """Port of RES4LYF RK_NoiseSampler.get_sde_step(mode='hard')."""
-    sigma = float(sigma)
+def _res4lyf_sde_coefficients(sigma_next, eta, sigma_max, variance_preserving):
+    """RES4LYF RK_NoiseSampler.get_sde_step(mode='hard') + get_sde_coeff()."""
     sigma_next = float(sigma_next)
-    eta_ratio = float(eta)
-
-    # RES4LYF hard mode asks for sigma_up = sigma_next * eta.
-    sigma_up = sigma_next * eta_ratio
+    eta = float(eta)
+    sigma_up = sigma_next * eta
 
     if variance_preserving:
         if sigma_up >= sigma_next:
             sigma_up = sigma_next * (0.9999 if eta >= 1.0 else eta)
         sigma_signal = float(sigma_max) - sigma_next
         sigma_residual = math.sqrt(max(sigma_next * sigma_next - sigma_up * sigma_up, 0.0))
-        alpha_ratio = sigma_signal + sigma_residual
-        if abs(alpha_ratio) < 1e-12:
-            sigma_down = sigma_next
-            alpha_ratio = 1.0
+        alpha_sum = sigma_signal + sigma_residual
+        if abs(alpha_sum) < 1e-12:
+            sigma_down, alpha_ratio = sigma_next, 1.0
         else:
-            sigma_down = sigma_residual / alpha_ratio
+            sigma_down = sigma_residual / alpha_sum
+            alpha_ratio = alpha_sum
     else:
-        alpha_ratio = 1.0
         sigma_down = math.sqrt(max(sigma_next * sigma_next - sigma_up * sigma_up, 0.0))
+        alpha_ratio = 1.0
 
     return sigma_up, sigma_down, alpha_ratio
 
 
-class _SDEModelProxy:
-    """Inject RES4LYF-style SDE noise at discrete native sigma transitions."""
+class _RES4LYFSDE:
+    def __init__(self, x, eta, seed, model_sampling, denoise_mask):
+        self.eta = float(eta)
+        self.sigma_max = float(model_sampling.sigma_max)
+        self.variance_preserving = isinstance(model_sampling, comfy.model_sampling.CONST)
+        self.mask = denoise_mask
+        self.generator = torch.Generator(device=x.device)
+        self.generator.manual_seed((int(seed) + 1) & 0x7FFFFFFFFFFFFFFF)
 
-    def __init__(self, wrapped_model, sigmas, eta, noise_seed, sigma_max, variance_preserving, denoise_mask):
-        self._wrapped_model = wrapped_model
-        self._sigmas = [float(value) for value in sigmas.detach().cpu().tolist()]
-        self._eta = float(eta)
-        self._sigma_max = float(sigma_max)
-        self._variance_preserving = bool(variance_preserving)
-        self._denoise_mask = denoise_mask
-        self._last_index = None
-        self._last_x = None
-        self._generator = None
-        self._noise_seed = int(noise_seed) & 0x7FFFFFFFFFFFFFFF
+    def swap_noise_step(self, x_0, x_next, sigma, sigma_next):
+        # RES4LYF explicitly skips the final zero-sigma transition.
+        if self.eta <= 0.0 or float(sigma_next) <= 0.0:
+            return x_next
 
-    def __getattr__(self, name):
-        return getattr(self._wrapped_model, name)
-
-    def _sigma_index(self, sigma):
-        if not torch.is_tensor(sigma):
-            value = float(sigma)
-        else:
-            flat = sigma.detach().reshape(-1)
-            value = float(flat[0].item())
-            # A single schedule is expected for the whole batch.
-            if flat.numel() > 1 and not torch.allclose(flat, flat[0].expand_as(flat), rtol=1e-5, atol=1e-7):
-                return None
-
-        for index, scheduled in enumerate(self._sigmas):
-            if math.isclose(value, scheduled, rel_tol=1e-5, abs_tol=1e-7):
-                return index
-        return None
-
-    def _make_noise(self, x):
-        if self._generator is None:
-            self._generator = torch.Generator(device=x.device)
-            self._generator.manual_seed(self._noise_seed)
-        noise = torch.randn(x.shape, generator=self._generator, device=x.device, dtype=x.dtype)
-        return _normalize_noise_channelwise(noise)
-
-    def _apply_sde(self, x, sigma_from, sigma_to, denoise_mask=None):
-        if self._eta <= 0.0 or sigma_to <= 0.0:
-            return x
-
-        sigma_up, sigma_down, alpha_ratio = _res4lyf_hard_sde_coefficients(
-            sigma_from, sigma_to, self._eta, self._sigma_max, self._variance_preserving
+        sigma_up, sigma_down, alpha_ratio = _res4lyf_sde_coefficients(
+            sigma_next, self.eta, self.sigma_max, self.variance_preserving
         )
         if sigma_up == 0.0:
-            return x
+            return x_next
 
-        # RES4LYF swap_noise_step(): reconstruct the local epsilon and x0
-        # from the deterministic solver transition, then renoise at sigma_to.
-        denominator = sigma_from - sigma_to
+        denominator = float(sigma) - float(sigma_next)
         if abs(denominator) < 1e-12:
-            return x
+            return x_next
 
-        eps_next = (self._last_x - x) / denominator
-        denoised_next = self._last_x - sigma_from * eps_next
-        noise = self._make_noise(x)
-        noised = alpha_ratio * (denoised_next + sigma_down * eps_next) + sigma_up * noise
+        # Port of RK_NoiseSampler.swap_noise_step().
+        eps_next = (x_0 - x_next) / denominator
+        denoised_next = x_0 - float(sigma) * eps_next
+        noise = torch.randn(
+            x_next.shape, generator=self.generator,
+            device=x_next.device, dtype=x_next.dtype,
+        )
+        noise = _normalize_noise_channelwise(noise)
+        result = alpha_ratio * (denoised_next + sigma_down * eps_next) + sigma_up * noise
 
-        mask_source = denoise_mask if denoise_mask is not None else self._denoise_mask
-        if mask_source is not None:
-            mask = mask_source.to(device=x.device, dtype=x.dtype)
-            while mask.ndim < x.ndim:
+        if self.mask is not None:
+            mask = self.mask.to(device=x_next.device, dtype=x_next.dtype)
+            while mask.ndim < x_next.ndim:
                 mask = mask.unsqueeze(1)
-            noised = mask * noised + (1.0 - mask) * x
-
-        return noised
-
-    def __call__(self, x, sigma, *args, **kwargs):
-        index = self._sigma_index(sigma)
-        if index is not None:
-            if self._last_index is None:
-                if index == 0:
-                    self._last_index = index
-                    self._last_x = x.detach().clone()
-            elif index == self._last_index + 1:
-                sigma_from = self._sigmas[self._last_index]
-                sigma_to = self._sigmas[index]
-                if self._eta > 0.0 and sigma_to > 0.0:
-                    x.copy_(self._apply_sde(x, sigma_from, sigma_to, kwargs.get("denoise_mask")))
-                self._last_index = index
-                self._last_x = x.detach().clone()
-
-        return self._wrapped_model(x, sigma, *args, **kwargs)
+            result = mask * result + (1.0 - mask) * x_next
+        return result
 
 
-def _wrap_sampler_for_sde(sampler, sigmas, eta, seed, model_sampling, denoise_mask):
-    original_function = sampler.sampler_function
-    sigma_max = float(model_sampling.sigma_max)
-    variance_preserving = isinstance(model_sampling, comfy.model_sampling.CONST)
-
-    def sde_sampler_function(model, noise, sampler_sigmas, extra_args=None, callback=None, disable=None, **extra_options):
-        proxy = _SDEModelProxy(
-            model,
-            sampler_sigmas,
-            eta,
-            seed + 1,
-            sigma_max,
-            variance_preserving,
-            denoise_mask,
+def _sde_euler(model, x, sigmas, sde, extra_args, callback, disable):
+    from comfy.k_diffusion.sampling import to_d, trange
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    for i in trange(len(sigmas) - 1, disable=disable):
+        sigma, sigma_next = sigmas[i], sigmas[i + 1]
+        denoised = model(x, sigma * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigma, 'sigma_hat': sigma, 'denoised': denoised})
+        if sigma_next == 0:
+            x = denoised
+            continue
+        _, sigma_down, _ = _res4lyf_sde_coefficients(
+            sigma_next, sde.eta, sde.sigma_max, sde.variance_preserving
         )
-        return original_function(
-            proxy,
-            noise,
-            sampler_sigmas,
-            extra_args=extra_args,
-            callback=callback,
-            disable=disable,
-            **extra_options,
+        d = to_d(x, sigma, denoised)
+        x_down = x + d * (sigma_down - sigma)
+        x = sde.swap_noise_step(x, x_down, sigma, sigma_next)
+    return x
+
+
+def _sde_euler_ancestral(model, x, sigmas, sde, extra_args, callback, disable):
+    # Replaces native ancestral noise; do not stack the two noise mechanisms.
+    return _sde_euler(model, x, sigmas, sde, extra_args, callback, disable)
+
+
+def _sde_heun(model, x, sigmas, sde, extra_args, callback, disable):
+    from comfy.k_diffusion.sampling import to_d, trange
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    for i in trange(len(sigmas) - 1, disable=disable):
+        sigma, sigma_next = sigmas[i], sigmas[i + 1]
+        denoised = model(x, sigma * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigma, 'sigma_hat': sigma, 'denoised': denoised})
+        if sigma_next == 0:
+            x = x + to_d(x, sigma, denoised) * (sigma_next - sigma)
+            continue
+        _, sigma_down, _ = _res4lyf_sde_coefficients(
+            sigma_next, sde.eta, sde.sigma_max, sde.variance_preserving
         )
+        d = to_d(x, sigma, denoised)
+        dt = sigma_down - sigma
+        x_euler = x + d * dt
+        denoised_2 = model(x_euler, sigma_down * s_in, **extra_args)
+        d_2 = to_d(x_euler, sigma_down, denoised_2)
+        x_down = x + (d + d_2) * (0.5 * dt)
+        x = sde.swap_noise_step(x, x_down, sigma, sigma_next)
+    return x
+
+
+def _sde_dpmpp_2m(model, x, sigmas, sde, extra_args, callback, disable):
+    from comfy.k_diffusion.sampling import trange
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    old_denoised = None
+    for i in trange(len(sigmas) - 1, disable=disable):
+        sigma, sigma_next = sigmas[i], sigmas[i + 1]
+        denoised = model(x, sigma * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigma, 'sigma_hat': sigma, 'denoised': denoised})
+        if sigma_next == 0:
+            x = denoised
+            old_denoised = denoised
+            continue
+
+        _, sigma_down, _ = _res4lyf_sde_coefficients(
+            sigma_next, sde.eta, sde.sigma_max, sde.variance_preserving
+        )
+        sigma_down_t = sigma.new_tensor(sigma_down)
+        t = sigma.log().neg()
+        t_down = sigma_down_t.log().neg()
+        h = t_down - t
+        if old_denoised is None:
+            x_down = (sigma_down_t / sigma) * x - (-h).expm1() * denoised
+        else:
+            h_last = t - sigmas[i - 1].log().neg()
+            r = h_last / h
+            denoised_d = (1.0 + 1.0 / (2.0 * r)) * denoised - (1.0 / (2.0 * r)) * old_denoised
+            x_down = (sigma_down_t / sigma) * x - (-h).expm1() * denoised_d
+        x = sde.swap_noise_step(x, x_down, sigma, sigma_next)
+        old_denoised = denoised
+    return x
+
+
+def _wrap_sampler_for_sde(sampler, sampler_name, eta, seed, model_sampling, denoise_mask):
+    adapters = {
+        "euler": _sde_euler,
+        "euler_ancestral": _sde_euler_ancestral,
+        "heun": _sde_heun,
+        "dpmpp_2m": _sde_dpmpp_2m,
+    }
+    adapter = adapters.get(sampler_name)
+    if adapter is None:
+        raise ValueError(
+            f"RES4LYF-style SDE adapter is not implemented for '{sampler_name}' yet. "
+            f"Available in this build: {', '.join(adapters)}."
+        )
+
+    def sde_sampler_function(model, noise, sampler_sigmas, extra_args=None,
+                             callback=None, disable=None, **extra_options):
+        sde = _RES4LYFSDE(noise, eta, seed, model_sampling, denoise_mask)
+        return adapter(model, noise, sampler_sigmas, sde, extra_args, callback, disable)
 
     sampler.sampler_function = sde_sampler_function
     return sampler
@@ -234,7 +257,7 @@ class CustomKSAMPLER:
                 "negative": ("CONDITIONING",),
                 "latent_image": ("LATENT",),
                 "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "round": False,
-                                    "tooltip": "RES4LYF-style hard SDE noise amount. Set to 0 for native deterministic sampling."}),
+                                    "tooltip": "RES4LYF-style hard SDE noise amount. Set to 0 to use the selected native sampler unchanged."}),
                 "sigmas_string": ("STRING", {"default": "", "multiline": True,
                                                "tooltip": "Optional comma- or newline-separated descending sigma values. Leave empty to use the selected native scheduler."}),
                 "interpolate_to_steps": ("INT", {"default": 20, "min": 1, "max": 10000, "step": 1}),
@@ -246,9 +269,9 @@ class CustomKSAMPLER:
     FUNCTION = "sample"
     CATEGORY = "sampling/custom"
     DESCRIPTION = (
-        "Native ComfyUI KSampler samplers and schedulers, optional KJNodes-style "
-        "log-linear custom sigmas, and an experimental RES4LYF-style hard SDE eta. "
-        "Non-zero eta is currently supported only by single-evaluation-per-step samplers."
+        "Native ComfyUI KSampler samplers and schedulers, optional log-linear custom "
+        "sigmas, and RES4LYF-style hard SDE transitions. Non-zero eta currently has "
+        "explicit solver adapters for Euler, Euler ancestral, Heun, and DPM++ 2M."
     )
 
     def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
@@ -277,18 +300,10 @@ class CustomKSAMPLER:
         else:
             sigmas = custom_sigmas.to(device=model.load_device)
 
-        if eta > 0.0:
-            if sampler_name not in _SDE_COMPATIBLE_SAMPLERS:
-                supported = ", ".join(sorted(_SDE_COMPATIBLE_SAMPLERS))
-                raise ValueError(
-                    f"RES4LYF-style eta is not yet implemented for '{sampler_name}'. "
-                    f"Set eta to 0 or use one of: {supported}."
-                )
-
         sampler = comfy.samplers.sampler_object(sampler_name)
         if eta > 0.0:
             sampler = _wrap_sampler_for_sde(
-                sampler, sigmas, eta, seed,
+                sampler, sampler_name, eta, seed,
                 model.get_model_object("model_sampling"), noise_mask
             )
 
