@@ -15,9 +15,6 @@ import latent_preview
 # then performs the exact RES4LYF swap_noise_step at the accepted step boundary.
 _SDE_ADAPTERS = {
     "euler": "euler",
-    "euler_ancestral": "euler_ancestral",
-    "heun": "heun",
-    "dpmpp_2m": "dpmpp_2m",
 }
 
 
@@ -69,26 +66,26 @@ def _normalize_noise_channelwise(noise):
 
 
 def _res4lyf_sde_coefficients(sigma_next, eta, sigma_max, variance_preserving):
-    """RES4LYF RK_NoiseSampler.get_sde_step(mode='hard') + get_sde_coeff()."""
+    """RES4LYF hard-mode get_sde_coeff/get_sde_step, including eta > 1."""
     sigma_next = float(sigma_next)
-    eta = float(eta)
-    sigma_up = sigma_next * eta
-
+    sigma_up = sigma_next * float(eta)
     if variance_preserving:
         if sigma_up >= sigma_next:
-            sigma_up = sigma_next * (0.9999 if eta >= 1.0 else eta)
+            sigma_up = sigma_next * (0.9999 if eta >= 1 else eta)
         sigma_signal = float(sigma_max) - sigma_next
-        sigma_residual = math.sqrt(max(sigma_next * sigma_next - sigma_up * sigma_up, 0.0))
-        alpha_sum = sigma_signal + sigma_residual
-        if abs(alpha_sum) < 1e-12:
-            sigma_down, alpha_ratio = sigma_next, 1.0
-        else:
-            sigma_down = sigma_residual / alpha_sum
-            alpha_ratio = alpha_sum
+        sigma_residual = torch.sqrt(torch.tensor(sigma_next**2 - sigma_up**2, dtype=torch.float64)).item()
+        alpha_ratio = sigma_signal + sigma_residual
+        sigma_down = sigma_residual / alpha_ratio if alpha_ratio != 0 else float('nan')
     else:
-        sigma_down = math.sqrt(max(sigma_next * sigma_next - sigma_up * sigma_up, 0.0))
         alpha_ratio = 1.0
-
+        sigma_down = torch.sqrt(torch.tensor(sigma_next**2 - sigma_up**2, dtype=torch.float64)).item()
+    # Upstream torch.nan_to_num() substitutes sigma_next for an invalid sigma_down.
+    if math.isnan(sigma_down):
+        sigma_down = sigma_next
+    if math.isnan(alpha_ratio):
+        alpha_ratio = 1.0
+    if math.isnan(sigma_up):
+        sigma_up = 0.0
     return sigma_up, sigma_down, alpha_ratio
 
 
@@ -99,7 +96,7 @@ class _RES4LYFSDE:
         self.variance_preserving = isinstance(model_sampling, comfy.model_sampling.CONST)
         self.mask = denoise_mask
         self.generator = torch.Generator(device=x.device)
-        self.generator.manual_seed((int(seed) + 1) & 0x7FFFFFFFFFFFFFFF)
+        self.generator.manual_seed(int(seed) & 0x7FFFFFFFFFFFFFFF)
 
     def swap_noise_step(self, x_0, x_next, sigma, sigma_next):
         # RES4LYF explicitly skips the final zero-sigma transition.
@@ -121,9 +118,10 @@ class _RES4LYFSDE:
         denoised_next = x_0 - float(sigma) * eps_next
         noise = torch.randn(
             x_next.shape, generator=self.generator,
-            device=x_next.device, dtype=x_next.dtype,
+            device=x_next.device, dtype=torch.float64,
         )
-        noise = _normalize_noise_channelwise(noise)
+        noise = (noise - noise.mean()) / noise.std()
+        noise = _normalize_noise_channelwise(noise).to(dtype=x_next.dtype)
         result = alpha_ratio * (denoised_next + sigma_down * eps_next) + sigma_up * noise
 
         if self.mask is not None:
@@ -146,12 +144,9 @@ def _sde_euler(model, x, sigmas, sde, extra_args, callback, disable):
         if sigma_next == 0:
             x = denoised
             continue
-        _, sigma_down, _ = _res4lyf_sde_coefficients(
-            sigma_next, sde.eta, sde.sigma_max, sde.variance_preserving
-        )
         d = to_d(x, sigma, denoised)
-        x_down = x + d * (sigma_down - sigma)
-        x = sde.swap_noise_step(x, x_down, sigma, sigma_next)
+        x_next = x + d * (sigma_next - sigma)
+        x = sde.swap_noise_step(x, x_next, sigma, sigma_next)
     return x
 
 
@@ -222,9 +217,6 @@ def _sde_dpmpp_2m(model, x, sigmas, sde, extra_args, callback, disable):
 def _wrap_sampler_for_sde(sampler, sampler_name, eta, seed, model_sampling, denoise_mask):
     adapters = {
         "euler": _sde_euler,
-        "euler_ancestral": _sde_euler_ancestral,
-        "heun": _sde_heun,
-        "dpmpp_2m": _sde_dpmpp_2m,
     }
     adapter = adapters.get(sampler_name)
     if adapter is None:
@@ -256,7 +248,7 @@ class CustomKSAMPLER:
                 "positive": ("CONDITIONING",),
                 "negative": ("CONDITIONING",),
                 "latent_image": ("LATENT",),
-                "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "round": False,
+                "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01, "round": False,
                                     "tooltip": "RES4LYF-style hard SDE noise amount. Set to 0 to use the selected native sampler unchanged."}),
                 "sigmas_string": ("STRING", {"default": "", "multiline": True,
                                                "tooltip": "Optional comma- or newline-separated descending sigma values. Leave empty to use the selected native scheduler."}),
