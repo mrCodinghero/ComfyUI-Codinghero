@@ -1,6 +1,9 @@
+import torch
+import numpy as np
 from decimal import Decimal, ROUND_HALF_UP
 import comfy.samplers, random, math
 from .constants import RESOLUTION_PRESETS, RES_SAMPLERS, ASPECT_RATIOS
+
 
 # fix this piece of shit n00b code
 if "bong_tangent" not in comfy.samplers.KSampler.SCHEDULERS:
@@ -123,6 +126,79 @@ class UpscaleSettingsCalc:
         adjheight = roundIt(height / factor)
 
         return (width, height, adjwidth, adjheight)
+
+
+#
+#
+#
+class CustomSigmas:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "sigmas_string": ("STRING", {
+                    "default": "14.615, 6.475, 3.861, 2.697, 1.886, 1.396, 0.963, 0.652, 0.399, 0.152, 0.029",
+                    "multiline": True
+                }),
+                "interpolate_to_steps": ("INT", {
+                    "default": 10,
+                    "min": 0,
+                    "max": 255,
+                    "step": 1
+                }),
+            }
+        }
+
+    RETURN_TYPES = ("SIGMAS",)
+    RETURN_NAMES = ("SIGMAS",)
+    FUNCTION = "customsigmas"
+    CATEGORY = "Custom/Noise"
+
+    def customsigmas(self, sigmas_string, interpolate_to_steps):
+
+        try:
+            values = [
+                float(x.strip())
+                for x in sigmas_string.split(",")
+                if x.strip()
+            ]
+        except ValueError as e:
+            raise ValueError(f"Invalid sigma value: {e}")
+
+        if len(values) < 2:
+            raise ValueError("At least two sigma values are required.")
+
+        if not all(np.isfinite(v) and v > 0 for v in values):
+            raise ValueError("All input sigma values must be positive and finite.")
+
+        if any(a <= b for a, b in zip(values, values[1:])):
+            raise ValueError("Sigma values must be strictly decreasing.")
+
+        sigmas = torch.tensor(values, dtype=torch.float32)
+
+        target_length = interpolate_to_steps + 1
+
+        if len(sigmas) != target_length:
+            sigmas = self.loglinear_interp(sigmas, target_length)
+
+        sigmas[-1] = 0.0
+
+        return (sigmas,)
+
+    @staticmethod
+    def loglinear_interp(sigmas, num_steps):
+
+        xs = np.linspace(0, 1, len(sigmas))
+        ys = np.log(sigmas.numpy())
+
+        new_xs = np.linspace(0, 1, num_steps)
+        new_ys = np.interp(new_xs, xs, ys)
+
+        return torch.tensor(
+            np.exp(new_ys),
+            dtype=torch.float32
+        )
 
 
 #
@@ -788,6 +864,7 @@ NODE_CLASS_MAPPINGS = {
     "Upscale Settings Calculator": UpscaleSettingsCalc,
     "Basic Settings": SettingsBasic,
     "Settings": Settings,
+    "Custom Sigmas": CustomSigmas,
     "Qwen Edit Settings": QwenEditSettings,
     "Flux.2 Settings": FluxSettings,
     "Flux.2 Settings RES4LYF": FluxSettingsRes,
@@ -803,6 +880,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Upscale Settings Calculator": "Upscale Settings Calculator",
     "Basic Settings": "Basic Settings",
     "Settings": "Settings",
+    "Custom Sigmas": "Custom Sigmas",
     "Qwen Edit Settings": "Qwen Edit Settings",
     "Flux.2 Settings": "Flux.2 Settings",
     "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
