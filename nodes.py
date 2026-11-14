@@ -644,9 +644,9 @@ class MinimaxSettings:
 
 
 #
-# Minimax-H3 Image Settings
+# Minimax-H3-Image Settings
 #
-# Basic settings for Miniax-H3 Image with aspect ratio and megapixels instead of static resolutions.
+# Basic settings for Miniax-H3-Image with aspect ratio and megapixels instead of static resolutions.
 #
 class MinimaxImageSettings:
 
@@ -657,7 +657,7 @@ class MinimaxImageSettings:
                 "steps": ("INT", {"label": "steps", "default": 8}),
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}), 
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
-                "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.1, "max": 2.0, "step": 0.01, "round": 0.01, "default": 0.5}),
+                "megapixels": ("FLOAT", {"label": "megapixels", "min": 0.5, "max": 4.0, "step": 0.05, "round": 0.05, "default": 1.0}),
                 "ratio": (list(ASPECT_RATIOS.keys()), {"label": "ratio", "default": "1:1"}),
                 "seed": ("INT", {"min": -1, "max": 2**63 - 1, "default": 0}),
                 "resize": (["original", "scale", "none"], {"label": "Resize", "default": "none"}),
