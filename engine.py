@@ -14,13 +14,22 @@ import comfy.samplers
 import comfy.model_sampling
 
 
-def _coefficients(sigma_next, eta, model_sampling):
+def _coefficients(sigma, sigma_next, eta, model_sampling):
+    """Exponential SDE coefficients, without a hard-mode eta cap."""
+    current = float(sigma)
     next_value = float(sigma_next)
-    up = next_value * float(eta)
+    # Exponential SDE scaling: eta is not clamped at 1.
+    if current <= 0 or next_value <= 0 or next_value >= current:
+        ratio = 0.0
+    else:
+        ratio = math.sqrt(max(0.0, -math.expm1(
+            2.0 * float(eta) * math.log(next_value / current)
+        )))
+    up = next_value * ratio
     is_const = isinstance(model_sampling, comfy.model_sampling.CONST)
     if is_const:
-        if up >= next_value:
-            up = next_value * 0.9999
+        # exp coefficients already keep up <= next_value for eta >= 0.
+        up = min(up, next_value)
         residual = math.sqrt(max(next_value ** 2 - up ** 2, 0.0))
         signal = float(model_sampling.sigma_max) - next_value
         alpha = signal + residual
@@ -55,7 +64,7 @@ def _euler_sde(model, x, sigmas, *, extra_args, callback, disable, eta, seed, mo
         if float(sigma_next) <= 0:
             x = denoised
             continue
-        sigma_up, sigma_down, alpha = _coefficients(sigma_next, eta, model_sampling)
+        sigma_up, sigma_down, alpha = _coefficients(sigma, sigma_next, eta, model_sampling)
         derivative = to_d(x, sigma, denoised)
         x_down = x + derivative * (sigma_down - sigma)
         x = alpha * (denoised + sigma_down * derivative) + sigma_up * _noise_like(x_down, generator)
@@ -84,7 +93,7 @@ def _native_sde(name, native_sampler, model, x, sigmas, *, extra_args, callback,
         if float(sigma_next) <= 0:
             sigma_up, sigma_down, alpha = 0.0, 0.0, 1.0
         else:
-            sigma_up, sigma_down, alpha = _coefficients(sigma_next, eta, model_sampling)
+            sigma_up, sigma_down, alpha = _coefficients(sigma, sigma_next, eta, model_sampling)
 
         # Some ancestral samplers add noise internally even for eta=0 unless
         # explicitly disabled. The SDE engine owns the stochastic transition.
@@ -129,7 +138,7 @@ def _native_sde(name, native_sampler, model, x, sigmas, *, extra_args, callback,
     return x
 
 
-def make_sde_sampler(name, sigmas, eta, seed, noise_mask=None, model_sampling=None):
+def make_sde_sampler(name, sigmas, eta, seed, noise_mask=None, model_sampling=None, **kwargs):
     sampler = comfy.samplers.sampler_object(name)
     if float(eta) == 0:
         return sampler

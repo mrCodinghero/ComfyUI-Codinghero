@@ -53,7 +53,7 @@ def _parse_custom_sigmas(sigmas_string, interpolate_to_steps):
 from .engine import make_sde_sampler
 
 
-class CustomKSAMPLER:
+class SuperSampler:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -67,10 +67,8 @@ class CustomKSAMPLER:
                 "positive": ("CONDITIONING",),
                 "negative": ("CONDITIONING",),
                 "latent_image": ("LATENT",),
-                "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01, "round": False,
-                                    "tooltip": "Experimental shared SDE bridge for native samplers. Multistep solvers reset history per interval; not ClownsharK parity."}),
-                "sigmas_string": ("STRING", {"default": "", "multiline": True,
-                                               "tooltip": "Optional comma- or newline-separated descending sigma values. Leave empty to use the selected native scheduler."}),
+                "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01, "round": False}),
+                "sigmas_string": ("STRING", {"default": "", "multiline": True}),
                 "interpolate_to_steps": ("INT", {"default": 20, "min": 1, "max": 10000, "step": 1}),
             }
         }
@@ -141,9 +139,9 @@ class CustomKSAMPLER:
 
 
 NODE_CLASS_MAPPINGS = {
-    "CustomKSAMPLER": CustomKSAMPLER,
+    "Super Sampler": SuperSampler,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "CustomKSAMPLER": "Custom KSampler (SDE + Custom Sigmas)",
+    "Super Sampler": "Super Sampler",
 }
