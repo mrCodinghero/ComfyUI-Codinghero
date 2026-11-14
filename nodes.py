@@ -129,7 +129,9 @@ class UpscaleSettingsCalc:
 
 
 #
+# CustomSigmas
 #
+# Customize the noise schedule without loading a bunch of other shit nodes.
 #
 class CustomSigmas:
 
