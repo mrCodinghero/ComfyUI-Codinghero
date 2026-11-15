@@ -1,3 +1,5 @@
+import math, numpy as np, torch
+
 def _parse_custom_sigmas(sigmas_string, interpolate_to_steps):
     """Parse positive, descending sigma values and log-linearly interpolate."""
     raw = [part.strip() for part in sigmas_string.replace("\n", ",").split(",")]
