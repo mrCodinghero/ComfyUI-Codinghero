@@ -1,8 +1,8 @@
-import torch
-import numpy as np
+import comfy.model_sampling, comfy.sample, comfy.samplers, comfy.utils, latent_preview, random, math, torch, numpy as np
 from decimal import Decimal, ROUND_HALF_UP
-import comfy.samplers, random, math
 from .constants import RESOLUTION_PRESETS, RES_SAMPLERS, ASPECT_RATIOS
+from .sampler import _parse_custom_sigmas
+from .engine import make_sde_sampler
 
 
 # fix this piece of shit n00b code
@@ -16,349 +16,6 @@ if "beta57" not in comfy.samplers.KSampler.SCHEDULERS:
 def roundIt(d):
     d = int(Decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     return (d)
-
-
-#
-# ImageSizeCalc
-#
-# Do somme math on the provide image and return the adjusted width and height.
-#
-class ImageSizeCalc:
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "image": ("IMAGE", {"label": "Input Image"}),
-                "operation": (
-                    ["multiply", "divide", "scale", "max"],
-                    {"label": "Operation"},
-                    {"default": "multiply"}
-                ),
-                "operand": ("STRING", {"label": "Operand"}, {"default": "1"})
-            }
-        }
-
-    RETURN_TYPES = ("INT", "INT",)
-    RETURN_NAMES = ("WIDTH", "HEIGHT",)
-
-    FUNCTION = "process"
-    CATEGORY = "custom"
-
-    def process(self, image, operand, operation):
-        # don't do anything if no one gave us an image
-        if image is None or len(image) == 0:
-            return (1, 1)
-
-        # don't do anything if the operand is 0
-        if operand is None or operand == "0":
-            return (1, 1)
-
-        # do some data conversion, but the user can't be a total moron
-        if "." in operand:
-            operand = float(operand)
-        elif "/" in operand:
-            x,y = operand.split("/")
-            x = int(x)
-            y = int(y)
-            f = x / y
-        else:
-            operand = int(operand)
-            f = operand
-
-        # get the image size
-        height, width = image.shape[1], image.shape[2]
-
-        match operation:
-            case "multiply":
-                width  *= operand
-                height *= operand
-            case "divide":
-                width  = width / operand
-                height = height / operand
-            case "scale":
-                width  = width * f
-                height = height * f
-            case "max":
-                m = max(width, height)
-                f = operand / m
-                width  = width * f
-                height = height * f
-            case _:
-                width = height = 1
-
-        # return at least a single pixel
-        width  = max(1, roundIt(width))
-        height = max(1, roundIt(height))
-
-        return (width, height)
-
-
-#
-# UpscaleSettingsCalc
-#
-# Enter the desired final image dimensions and a multiplier, and get those plus the latent image's scaled dimensions.
-#
-class UpscaleSettingsCalc:
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "width": ("INT", {"label": "Width", "default": "512", "min": 2, "max": 8192, "step": 2}),
-                "height": ("INT", {"label": "Height", "default": "512", "min": 2, "max": 8192, "step": 2}),
-                "factor": ("INT", {"label": "Factor", "default": "2", "min": 1, "max": 8})
-            }
-        }
-
-    RETURN_TYPES = ("INT", "INT", "INT", "INT")
-    RETURN_NAMES = ("final WIDTH", "final HEIGHT", "latent WIDTH", "latent HEIGHT")
-
-    FUNCTION = "process"
-    CATEGORY = "custom"
-
-    def process(self, width, height, factor):
-        # don't do anything if the factor is 0
-        if factor is None or factor == "0":
-            return (1, 1)
-
-        adjwidth  = roundIt(width / factor)
-        adjheight = roundIt(height / factor)
-
-        return (width, height, adjwidth, adjheight)
-
-
-#
-# CustomSigmas
-#
-# Customize the noise schedule without loading a bunch of other shit nodes.
-#
-class CustomSigmas:
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "sigmas_string": ("STRING", {
-                    "default": "14.615, 6.475, 3.861, 2.697, 1.886, 1.396, 0.963, 0.652, 0.399, 0.152, 0.029",
-                    "multiline": True
-                }),
-                "interpolate_to_steps": ("INT", {
-                    "default": 10,
-                    "min": 0,
-                    "max": 255,
-                    "step": 1
-                }),
-            }
-        }
-
-    RETURN_TYPES = ("SIGMAS",)
-    RETURN_NAMES = ("SIGMAS",)
-    FUNCTION = "customsigmas"
-    CATEGORY = "Custom/Noise"
-
-    def customsigmas(self, sigmas_string, interpolate_to_steps):
-
-        try:
-            values = [
-                float(x.strip())
-                for x in sigmas_string.split(",")
-                if x.strip()
-            ]
-        except ValueError as e:
-            raise ValueError(f"Invalid sigma value: {e}")
-
-        if len(values) < 2:
-            raise ValueError("At least two sigma values are required.")
-
-        if not all(np.isfinite(v) and v > 0 for v in values):
-            raise ValueError("All input sigma values must be positive and finite.")
-
-        if any(a <= b for a, b in zip(values, values[1:])):
-            raise ValueError("Sigma values must be strictly decreasing.")
-
-        sigmas = torch.tensor(values, dtype=torch.float32)
-
-        target_length = interpolate_to_steps + 1
-
-        if len(sigmas) != target_length:
-            sigmas = self.loglinear_interp(sigmas, target_length)
-
-        sigmas[-1] = 0.0
-
-        return (sigmas,)
-
-    @staticmethod
-    def loglinear_interp(sigmas, num_steps):
-
-        xs = np.linspace(0, 1, len(sigmas))
-        ys = np.log(sigmas.numpy())
-
-        new_xs = np.linspace(0, 1, num_steps)
-        new_ys = np.interp(new_xs, xs, ys)
-
-        return torch.tensor(
-            np.exp(new_ys),
-            dtype=torch.float32
-        )
-
-
-#
-# Settings (Basic)
-#
-# All the basic settings in one convenient node.
-#
-class SettingsBasic:
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "optional": {
-                "width": ("INT", {"label": "width"}, {"default": "720"}),
-                "height": ("INT", {"label": "height"}, {"default": "480"}),
-                "shift": ("FLOAT", {"label": "shift"}, {"default": "7.0"}),
-                "steps": ("INT", {"label": "steps"}, {"default": "4"}),
-                "cfg": ("FLOAT", {"label": "cfg"}, {"default": "1.0"}),
-                "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
-                "res_sampler": (RES_SAMPLERS, {"default": "linear/euler"}), 
-                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
-                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
-                "resize": (
-                    ["none", "original", "nearest"],
-                    {"label": "Resize"},
-                    {"default": "none"}
-                ),
-                "image": ("IMAGE", {"default": None})
-            }
-        }
-
-    RETURN_TYPES = ("INT", "INT", "FLOAT", "INT", "FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, RES_SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "SHIFT", "STEPS", "CFG", "SAMPLER", "SCHEDULER", "RES_SAMPLER", "RES_SCHEDULER", "SEED")
-
-    FUNCTION = "process"
-    CATEGORY = "custom"
-
-    def process(self, width, height, shift, steps, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
-        # generate a random seed if it's -1
-        if seed == -1:
-            seed = random.randint(0, 4294967294)
-
-        # don't do anything else if we don't have an image
-        if image is not None and len(image) > 0:
-            # get the image size
-            imgHeight, imgWidth = image.shape[1], image.shape[2]
-
-            match resize:
-                case "none":
-                    width  = width
-                    height = height
-                case "original":
-                    width  = imgWidth
-                    height = imgHeight
-                case "nearest":
-                    d = max(width, height)
-                    m = max(imgWidth, imgHeight)
-                    f = d / m
-                    width  = imgWidth * f
-                    height = imgHeight * f
-                case _:
-                    width  = width
-                    height = height
-
-            # return at least a single pixel
-            width  = max(1, roundIt(width))
-            height = max(1, roundIt(height))
-
-        # adjust width and height to a multiple of 16
-        width  = round(width / 16) * 16
-        height = round(height / 16) * 16
-
-        return (width, height, shift, steps, cfg, sampler_name, scheduler, res_sampler, res_scheduler, seed)
-
-
-#
-# Settings (Advanced)
-#
-# All the settings in one convenient node.
-#
-class Settings:
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "optional": {
-                "width": ("INT", {"label": "width"}, {"default": 720}),
-                "height": ("INT", {"label": "height"}, {"default": 480}),
-                "length": ("INT", {"label": "length"}, {"default": 3}),
-                "fps": ("FLOAT", {"label": "fps"}, {"default": 16.0}),
-                "shift": ("FLOAT", {"label": "shift"}, {"default": 7.0}),
-                "cfg": ("FLOAT", {"label": "cfg"}, {"default": 2.0}),
-                "steps": ("INT", {"label": "steps"}, {"default": 4}),
-                "switch": ("INT", {"label": "switch"}, {"default": 2}),
-                "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
-                "res_sampler": (RES_SAMPLERS, {"default": "linear/euler"}), 
-                "res_scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "simple"}),
-                "seed": ("INT", {"default": 0, "min": -1, "max": 2**63 - 1}),
-                "resize": (
-                    ["none", "original", "nearest"],
-                    {"label": "Resize"},
-                    {"default": "none"}
-                ),
-                "image": ("IMAGE", {"default": None})
-            }
-        }
-
-    RETURN_TYPES = ("INT", "INT", "INT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, RES_SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "INT")
-    RETURN_NAMES = ("WIDTH", "HEIGHT", "FRAMES", "FPS", "SHIFT", "CFG", "STEPS", "SWITCH", "SAMPLER", "SCHEDULER", "RES_SAMPLER", "RES_SCHEDULER", "SEED")
-
-    FUNCTION = "process"
-    CATEGORY = "custom"
-
-    def process(self, width, height, length, fps, shift, cfg, steps, switch, sampler_name, scheduler, res_sampler, res_scheduler, seed, resize, image=None):
-        if length is not None and length > 0 and fps is not None and fps > 0.0:
-            # do the math and add an extra frame
-            frames = roundIt((length * fps) + 1)
-        else:
-            frames = 1
-            fps = 1
-
-        # generate a random seed if it's -1
-        if seed == -1:
-            seed = random.randint(0, 4294967294)
-
-        # don't do anything else if we don't have an image
-        if image is not None and len(image) > 0:
-            # get the image size
-            imgHeight, imgWidth = image.shape[1], image.shape[2]
-
-            match resize:
-                case "none":
-                    width  = width
-                    height = height
-                case "original":
-                    width  = imgWidth
-                    height = imgHeight
-                case "nearest":
-                    d = max(width, height)
-                    m = max(imgWidth, imgHeight)
-                    f = d / m
-                    width  = imgWidth * f
-                    height = imgHeight * f
-                case _:
-                    width  = width
-                    height = height
-
-            # return at least a single pixel
-            width  = max(1, roundIt(width))
-            height = max(1, roundIt(height))
-
-        # adjust width and height to a multiple of 16
-        width = round(width / 16) * 16
-        height = round(height / 16) * 16
-
-        return (width, height, frames, fps, shift, cfg, steps, switch, sampler_name, scheduler, res_sampler, res_scheduler, seed)
 
 
 #
@@ -861,12 +518,92 @@ class Qwen21EditSettings:
         return (width, height, steps, cfg, sampler, scheduler, seed)
 
 
+class SuperSampler:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
+                "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
+                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
+                "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
+                "positive": ("CONDITIONING",),
+                "negative": ("CONDITIONING",),
+                "latent_image": ("LATENT",),
+                "eta": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01, "round": False}),
+                "sigmas_string": ("STRING", {"default": "", "multiline": True}),
+                "interpolate_to_steps": ("INT", {"default": 20, "min": 1, "max": 10000, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("LATENT",)
+    FUNCTION = "sample"
+    CATEGORY = "sampling/custom"
+    DESCRIPTION = (
+        "Native ComfyUI KSampler samplers and schedulers, optional KJNodes-style "
+        "log-linear custom sigmas, and experimental SDE eta for all native samplers. "
+        "Multistep solvers currently reset history each interval; not RK parity."
+    )
+
+    def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
+               latent_image, eta, sigmas_string, interpolate_to_steps):
+        latent = latent_image.copy()
+        latent_samples = latent["samples"]
+        latent_samples = comfy.sample.fix_empty_latent_channels(
+            model,
+            latent_samples,
+            latent.get("downscale_ratio_spacial", None),
+            latent.get("downscale_ratio_temporal", None),
+        )
+
+        batch_inds = latent.get("batch_index", None)
+        noise = comfy.sample.prepare_noise(latent_samples, seed, batch_inds)
+        noise_mask = latent.get("noise_mask", None)
+
+        # Let ComfyUI generate its own native schedule first. This preserves
+        # sampler-specific sigma handling (including discarded penultimate sigmas).
+        native_ksampler = comfy.samplers.KSampler(
+            model, steps, model.load_device, sampler_name, scheduler
+        )
+        custom_sigmas = _parse_custom_sigmas(sigmas_string, interpolate_to_steps)
+        if custom_sigmas is None:
+            sigmas = native_ksampler.sigmas
+        else:
+            sigmas = custom_sigmas.to(device=model.load_device)
+
+        sampler = make_sde_sampler(sampler_name, sigmas, eta, seed, noise_mask, model.get_model_object("model_sampling"))
+
+        total_steps = max(len(sigmas) - 1, 1)
+        callback = latent_preview.prepare_callback(model, total_steps)
+        disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
+
+        samples = comfy.samplers.sample(
+            model,
+            noise,
+            positive,
+            negative,
+            cfg,
+            model.load_device,
+            sampler,
+            sigmas,
+            model_options=model.model_options,
+            latent_image=latent_samples,
+            denoise_mask=noise_mask,
+            callback=callback,
+            disable_pbar=disable_pbar,
+            seed=seed,
+        )
+
+        latent.pop("downscale_ratio_spacial", None)
+        latent.pop("downscale_ratio_temporal", None)
+        latent["samples"] = samples
+        return (latent,)
+
+
 NODE_CLASS_MAPPINGS = {
-    "Image Size Calculator": ImageSizeCalc,
-    "Upscale Settings Calculator": UpscaleSettingsCalc,
-    "Basic Settings": SettingsBasic,
-    "Settings": Settings,
-    "Custom Sigmas": CustomSigmas,
     "Qwen Edit Settings": QwenEditSettings,
     "Flux.2 Settings": FluxSettings,
     "Flux.2 Settings RES4LYF": FluxSettingsRes,
@@ -874,15 +611,11 @@ NODE_CLASS_MAPPINGS = {
     "Minimax-H3 t2v Settings": MinimaxT2vSettings,
     "Minimax-H3 Settings": MinimaxSettings,
     "Minimax-H3 Image Settings": MinimaxImageSettings,
-    "Qwen 2.1 Edit Settings": Qwen21EditSettings
+    "Qwen 2.1 Edit Settings": Qwen21EditSettings,
+    "Super Sampler": SuperSampler
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Image Size Calculator": "Image Size Calculator",
-    "Upscale Settings Calculator": "Upscale Settings Calculator",
-    "Basic Settings": "Basic Settings",
-    "Settings": "Settings",
-    "Custom Sigmas": "Custom Sigmas",
     "Qwen Edit Settings": "Qwen Edit Settings",
     "Flux.2 Settings": "Flux.2 Settings",
     "Flux.2 Settings RES4LYF": "Flux.2 Settings RES4LYF",
@@ -890,5 +623,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Minimax-H3 t2v Settings": "Minimax-H3 t2v Settings",
     "Minimax-H3 Settings": "Minimax-H3 Settings",
     "Minimax-H3 Image Settings": "Minimax-H3 Image Settings",
-    "Qwen 2.1 Edit Settings": "Qwen 2.1 Edit Settings"
+    "Qwen 2.1 Edit Settings": "Qwen 2.1 Edit Settings",
+    "Super Sampler": "Super Sampler"
 }
