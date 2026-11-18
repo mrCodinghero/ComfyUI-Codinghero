@@ -518,6 +518,37 @@ class Qwen21EditSettings:
         return (width, height, steps, cfg, sampler, scheduler, seed)
 
 
+class SigmaInspector:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "sigmas": ("SIGMAS",),
+            }
+        }
+
+    RETURN_TYPES = ("SIGMAS", "STRING")
+    RETURN_NAMES = ("sigmas", "sigma_string")
+    FUNCTION = "inspect"
+    CATEGORY = "sampling/custom_sampling/sigmas"
+    OUTPUT_NODE = True
+
+    def inspect(self, sigmas):
+        values = sigmas.detach().cpu().flatten().tolist()
+
+        sigma_string = ",\n".join(
+            format(value, ".9g") for value in values
+        )
+
+        return {
+            "ui": {
+                "text": [sigma_string],
+            },
+            "result": (sigmas, sigma_string),
+        }
+
+
 class SuperSampler:
     @classmethod
     def INPUT_TYPES(cls):
@@ -612,7 +643,8 @@ NODE_CLASS_MAPPINGS = {
     "Minimax-H3 Settings": MinimaxSettings,
     "Minimax-H3 Image Settings": MinimaxImageSettings,
     "Qwen 2.1 Edit Settings": Qwen21EditSettings,
-    "Super Sampler": SuperSampler
+    "Super Sampler": SuperSampler,
+    "Sigma Inspector": SigmaInspector
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -624,5 +656,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Minimax-H3 Settings": "Minimax-H3 Settings",
     "Minimax-H3 Image Settings": "Minimax-H3 Image Settings",
     "Qwen 2.1 Edit Settings": "Qwen 2.1 Edit Settings",
-    "Super Sampler": "Super Sampler"
+    "Super Sampler": "Super Sampler",
+    "Sigma Inspector": "Sigma Inspector"
 }
